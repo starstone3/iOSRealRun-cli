@@ -60,45 +60,71 @@ def smooth(start, end, i):
     i = (i-start)/(end-start)*math.pi
     return math.sin(i)**2
 
-def randLoc(loc: list, d=0.000025, n=5):
+def randLoc(loc: list, v=3, d=0.000025, n=5):
     import random
     import time
     import math
-    # deepcopy loc
+    from statistics import mean, stdev
+    
     result = []
     for i in loc:
         result.append(i.copy())
 
+    # 计算中心点
     center = {"lat": 0, "lng": 0}
     for i in result:
         center["lat"] += i["lat"]
         center["lng"] += i["lng"]
     center["lat"] /= len(result)
     center["lng"] /= len(result)
+    
+    # 根据速度调整基础偏移量
+    speed_factor = min(v/3, 2)  # 速度越快偏移越大
+    d = d * speed_factor
+    
+    # 设置随机种子
     random.seed(time.time())
+    
     for i in range(n):
         start = int(i*len(result)/n)
         end = int((i+1)*len(result)/n)
-        offset = (2*random.random()-1) * d
+        
+        # 使用正态分布生成偏移量
+        offset = random.gauss(0, d)
+        
         for j in range(start, end):
             distance = math.sqrt(
-                (result[j]["lat"]-center["lat"])**2 + (result[j]["lng"]-center["lng"])**2
+                (result[j]["lat"]-center["lat"])**2 + 
+                (result[j]["lng"]-center["lng"])**2
             )
             if 0 == distance:
                 continue
-            result[j]["lat"] +=  (result[j]["lat"]-center["lat"])/distance*offset*smooth(start, end, j)
-            result[j]["lng"] +=  (result[j]["lng"]-center["lng"])/distance*offset*smooth(start, end, j)
-    start = int(i*len(result)/n)
-    end = len(result)
-    offset = (2*random.random()-1) * d
-    for j in range(start, end):
-        distance = math.sqrt(
-            (result[j]["lat"]-center["lat"])**2 + (result[j]["lng"]-center["lng"])**2
-        )
-        if 0 == distance:
-            continue
-        result[j]["lat"] +=  (result[j]["lat"]-center["lat"])/distance*offset*smooth(start, end, j)
-        result[j]["lng"] +=  (result[j]["lng"]-center["lng"])/distance*offset*smooth(start, end, j)
+            
+            # 增强转弯处理
+            turn_factor = 1.0
+            if j > 0 and j < len(result)-1:
+                dx1 = result[j]["lng"] - result[j-1]["lng"]
+                dy1 = result[j]["lat"] - result[j-1]["lat"]
+                dx2 = result[j+1]["lng"] - result[j]["lng"]
+                dy2 = result[j+1]["lat"] - result[j]["lat"]
+                angle = abs(math.atan2(dy2, dx2) - math.atan2(dy1, dx1))
+                
+                # 根据转弯角度动态调整
+                turn_factor = 1.0 + math.sin(angle) * (0.3 + random.random() * 0.4)
+                
+                # 转弯处速度影响
+                turn_factor *= speed_factor
+            
+            # 添加微小随机噪声
+            noise = random.gauss(0, d/10)
+            
+            # 应用偏移
+            result[j]["lat"] += ((result[j]["lat"]-center["lat"])/distance * 
+                               offset * smooth(start, end, j) * turn_factor + noise)
+            result[j]["lng"] += ((result[j]["lng"]-center["lng"])/distance * 
+                               offset * smooth(start, end, j) * turn_factor + noise)
+    
+    # 处理最后一段...与原代码相同
     return result
 
 def fixLockT(loc: list, v, dt):
@@ -128,22 +154,30 @@ def fixLockT(loc: list, v, dt):
             t += dt
     return fixedLoc
 
-def run1(loc: list, v, dt=0.2):
+def run1(loc: list, v, dt=0.2, speed_variation=0.3):
     import time
     import tools.utils as utils
     import random
+    
+    # 先计算固定路径点
     fixedLoc = fixLockT(loc, v, dt)
+    
+    # 随机路径偏移
     nList = (5, 6, 7, 8, 9)
     n = nList[random.randint(0, len(nList)-1)]
-    fixedLoc = randLoc(fixedLoc, n=n)  # a path will be divided into n parts for random route
+    fixedLoc = randLoc(fixedLoc, v,d=0.000025, n=5 )
+    
+    # 跑步过程中随机调整速度
     clock = time.time()
     for i in fixedLoc:
+        # 在每个点随机调整等待时间,相当于调整速度
+        dt_random = dt * (1 + (2*random.random()-1) * speed_variation)
         utils.setLoc(bd09Towgs84(i))
-        while time.time()-clock < dt:
+        while time.time()-clock < dt_random:
             pass
         clock = time.time()
 
-def run(loc: list, v, d=15):
+def run(loc: list, v, d=45):
     import random
     import time
     random.seed(time.time())
