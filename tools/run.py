@@ -60,7 +60,7 @@ def smooth(start, end, i):
     i = (i-start)/(end-start)*math.pi
     return math.sin(i)**2
 
-def randLoc(loc: list, v=3, d=0.000025, n=5):
+def randLoc(loc: list, v=3, d=0.000015, n=5):#d是基础偏移量，也即是跑步时的偏移量，n是偏移次数
     import random
     import time
     import math
@@ -79,7 +79,7 @@ def randLoc(loc: list, v=3, d=0.000025, n=5):
     center["lng"] /= len(result)
     
     # 根据速度调整基础偏移量
-    speed_factor = min(v/3, 2)  # 速度越快偏移越大
+    speed_factor = min(v/4, 1.5)  # 速度越快偏移越大，但不超过1.5
     d = d * speed_factor
     
     # 设置随机种子
@@ -110,13 +110,13 @@ def randLoc(loc: list, v=3, d=0.000025, n=5):
                 angle = abs(math.atan2(dy2, dx2) - math.atan2(dy1, dx1))
                 
                 # 根据转弯角度动态调整
-                turn_factor = 1.0 + math.sin(angle) * (0.3 + random.random() * 0.4)
+                turn_factor = 1.0 + math.sin(angle) * (0.3 + random.random() * 0.2)#0.3和0.2是随机调整的参数，可以根据实际情况调整
                 
                 # 转弯处速度影响
-                turn_factor *= speed_factor
+                turn_factor *= (speed_factor*0.8)#0.8是随机调整的参数，可以根据实际情况调整
             
             # 添加微小随机噪声
-            noise = random.gauss(0, d/10)
+            noise = random.gauss(0, d/20)
             
             # 应用偏移
             result[j]["lat"] += ((result[j]["lat"]-center["lat"])/distance * 
